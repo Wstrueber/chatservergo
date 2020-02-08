@@ -1,1 +1,1 @@
-web: bin/chatservergo
+web: chatservergo
