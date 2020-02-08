@@ -1,1 +1,1 @@
-web: chatservergo
+web: go run main.go
