@@ -160,8 +160,8 @@ func (t *Ticker) pushVersionNumber() {
 // WebSocket controller
 func WebSocket(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool {
-		// return true
-		return r.Header.Get("Origin") == "http://localhost:3000"
+		return true
+		// return r.Header.Get("Origin") == "http://localhost:3000"
 	}
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
