@@ -1,1 +1,1 @@
-web: bin/chatservergo/src
+web: bin/src
