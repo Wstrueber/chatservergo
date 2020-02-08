@@ -24,7 +24,7 @@ func (a *App) Init() {
 
 // SetRouters sets up routers
 func (a *App) SetRouters() {
-	a.Get("/", a.handleRequest(controllers.WebSocket))
+	a.Get("/ws", a.handleRequest(controllers.WebSocket))
 }
 
 func (a *App) handleRequest(handler RequestHandlerFunction) http.HandlerFunc {
