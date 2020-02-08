@@ -10,6 +10,6 @@ func main() {
 	port := os.Getenv("PORT")
 	app := &app.App{}
 	app.Init()
-	fmt.Println("Server has started on port 8080...")
-	app.Run(port)
+	fmt.Printf("Server has started on port %s", port)
+	app.Run(":" + port)
 }
