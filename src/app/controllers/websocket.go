@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,31 +17,40 @@ var upgrader = websocket.Upgrader{
 
 // ClientMessage ...
 type ClientMessage struct {
-	Message string `"json":"message"`
+	Action  string `json:"action"`
+	Message string `json:"message"`
 }
 
 // JSONResponse ...
 type JSONResponse struct {
 	AppVersionNumber string      `json:"appVersionNumber"`
-	Data             interface{} `json:"data,omitempty"`
+	Response         interface{} `json:"response,omitempty"`
+}
+type Client struct {
+	UserName string    `json:"userName"`
+	ClientID uuid.UUID `json:"clientId"`
 }
 
 // ClientResponse ...
 type ClientResponse struct {
-	Message string    `json:"message"`
-	Time    time.Time `json:"time"`
+	*Client
+	JSONResponse
+	Data string     `json:"data,omitempty"`
+	Time *time.Time `json:"serverTime,omitempty"`
 }
 
 var conn *websocket.Conn
 
+var client *Client
+
 func writeJSON(clientResponse *ClientResponse) error {
-	cr := JSONResponse{AppVersionNumber: constants.AppVersionNumber}
-	logMsg := fmt.Sprintf("websocket.writeJson: writing to client: app version number: %q", cr.AppVersionNumber)
+
+	logMsg := fmt.Sprintf("websocket.writeJson: writing to client: app version number: %q", constants.AppVersionNumber)
 	if clientResponse != nil {
-		cr.Data = &clientResponse
-		logMsg = fmt.Sprintf("websocket.writeJson: writing to client: app version number: %q, message: %q", cr.AppVersionNumber, clientResponse.Message)
+		logMsg = fmt.Sprintf("websocket.writeJson: writing to client: app version number: %q, message: %q", constants.AppVersionNumber, clientResponse.Data)
 	}
-	err := conn.WriteJSON(cr)
+
+	err := conn.WriteJSON(clientResponse)
 	if err != nil {
 		err = fmt.Errorf("websocket.writeJSON: Failed to send JSON %w", err)
 		fmt.Println(err.Error())
@@ -50,8 +60,64 @@ func writeJSON(clientResponse *ClientResponse) error {
 	return nil
 }
 
-func reader() error {
+func handleClientRequest(clientMessage *ClientMessage, clientID uuid.UUID) {
+	switch clientMessage.Action {
+	case constants.RequestResponse:
+		fmt.Printf("made it here --- %s", client.UserName)
+		err := writeJSON(&ClientResponse{
+			Client: client,
+			JSONResponse: JSONResponse{
+				AppVersionNumber: constants.AppVersionNumber,
+				Response:         map[string]interface{}{"message": clientMessage.Message},
+			},
+		})
+		if err != nil {
+			return
+		}
+		return
+	case constants.RequestVersionNumber:
+		err := writeJSON(&ClientResponse{
+			JSONResponse: JSONResponse{
+				AppVersionNumber: constants.AppVersionNumber,
+			},
+		})
+		if err != nil {
+			return
+		}
+		return
+	case constants.UserTyping:
+		err := writeJSON(&ClientResponse{
+			Client: client,
+			JSONResponse: JSONResponse{
+				AppVersionNumber: constants.AppVersionNumber,
+				Response:         map[string]interface{}{"typing": true},
+			},
+		})
+		if err != nil {
+			return
+		}
+		return
+	case constants.RequestLogin:
+		client = &Client{UserName: clientMessage.Message, ClientID: clientID}
+		fmt.Printf("%s", client.UserName)
+		err := writeJSON(&ClientResponse{
+			Client: client,
+			JSONResponse: JSONResponse{
+				AppVersionNumber: constants.AppVersionNumber,
+				Response:         map[string]interface{}{"userName": clientMessage.Message},
+			},
+		})
+		if err != nil {
+			return
+		}
+		return
+	}
+	return
+}
+
+func reader(clientID uuid.UUID) error {
 	clientMessage := new(ClientMessage)
+
 	for {
 		err := conn.ReadJSON(&clientMessage)
 		if err != nil {
@@ -59,21 +125,8 @@ func reader() error {
 			fmt.Println(err.Error())
 			return err
 		}
-
+		handleClientRequest(clientMessage, clientID)
 		fmt.Println(fmt.Sprintf("websocket.reader: Client message: %q", clientMessage.Message))
-		if clientMessage.Message == constants.RequestVersionNumber {
-			writeJSON(nil)
-		} else {
-			err := writeJSON(&ClientResponse{
-				Message: "Server has received the response",
-				Time:    time.Now().UTC(),
-			})
-			if err != nil {
-				err = fmt.Errorf("websocket.reader: Failed to send message to client: %w", err)
-				fmt.Println(err.Error())
-				return err
-			}
-		}
 	}
 }
 
@@ -107,24 +160,23 @@ func (t *Ticker) pushVersionNumber() {
 // WebSocket controller
 func WebSocket(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool {
-		return true
-		// return r.Header.Get("Origin") == "http://localhost:3000"
+		// return true
+		return r.Header.Get("Origin") == "http://localhost:3000"
 	}
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Printf("websocket.WebSocket: Failed to upgrade the HTTP server connection to the WebSocket protocol, %s", err.Error())
-		writeJSON(&ClientResponse{Message: err.Error()})
+		writeJSON(&ClientResponse{Data: err.Error()})
 		return
 	}
 	conn = ws
 
 	fmt.Println("websocket.WebSocket: Client Successfully Connected...")
-	ticker := createTicker(10 * time.Second)
-	ticker.pushVersionNumber()
-	err = reader()
+	clientID := uuid.New()
+	err = reader(clientID)
 	if err != nil {
 		fmt.Printf("websocket.WebSocket: Failed to read client message %s", err.Error())
-		writeJSON(&ClientResponse{Message: err.Error()})
+		writeJSON(&ClientResponse{Data: err.Error()})
 		return
 	}
 }
