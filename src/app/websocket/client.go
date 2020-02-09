@@ -14,6 +14,7 @@ type Client struct {
 	Pool     *Pool           `json:"-"`
 	UserName string          `json:"userName"`
 	ClientID uuid.UUID       `json:"clientId"`
+	Color    string          `json:"color"`
 }
 
 // JSONResponse ...
@@ -60,7 +61,7 @@ func (c *Client) Read() {
 			case constants.RequestVersionNumber:
 				c.Conn.WriteJSON(JSONResponse{AppVersionNumber: constants.AppVersionNumber})
 			case constants.UserTyping:
-				fmt.Printf("Client ---> %s %s\n", clientMessage.Client.ClientID, clientMessage.Client.UserName, clientMessage.Typing)
+				fmt.Printf("Client ---> %s %s\n", clientMessage.Client.ClientID, clientMessage.Client.UserName)
 				c.Pool.Typing <- clientMessage
 			case constants.RequestLogin:
 				c.Pool.Login <- clientMessage.Client

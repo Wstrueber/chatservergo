@@ -53,16 +53,20 @@ func (pool *Pool) Start() {
 					break
 				}
 			}
+			break
 		case typing := <-pool.Typing:
 			fmt.Println(typing.Typing)
 			for client, _ := range pool.Clients {
-				if err := client.Conn.WriteJSON(ClientResponse{Client: typing.Client, Typing: typing.Typing}); err != nil {
-					fmt.Println(err)
-					client.Conn.Close()
-					delete(pool.Clients, client)
-					break
+				if typing.Client.ClientID != client.ClientID {
+					if err := client.Conn.WriteJSON(ClientResponse{Client: typing.Client, Typing: typing.Typing}); err != nil {
+						fmt.Println(err)
+						client.Conn.Close()
+						delete(pool.Clients, client)
+						break
+					}
 				}
 			}
+			break
 		case login := <-pool.Login:
 
 			fmt.Printf("%s", login.UserName)
@@ -70,16 +74,25 @@ func (pool *Pool) Start() {
 				if client.ClientID == login.ClientID {
 					client.UserName = login.UserName
 					fmt.Printf("\nFound Client ----> %s", login.UserName)
-
-					client.Conn.WriteJSON(ClientResponse{Client: client, Message: "has joined..."})
 					if err := client.Conn.WriteJSON(Client{ClientID: login.ClientID, UserName: login.UserName}); err != nil {
 						fmt.Println(err)
 						client.Conn.Close()
 						delete(pool.Clients, client)
-						return
+						break
+					}
+				}
+				if client.ClientID != login.ClientID {
+					fmt.Println(login.UserName, login.ClientID, "<---- user \n")
+					message := &ClientResponse{Client: &Client{UserName: login.UserName}, Message: "has joined..."}
+					if err := client.Conn.WriteJSON(message); err != nil {
+						fmt.Println(err)
+						client.Conn.Close()
+						delete(pool.Clients, client)
+						break
 					}
 				}
 			}
+			break
 		}
 	}
 }
