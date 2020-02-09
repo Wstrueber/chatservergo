@@ -40,6 +40,7 @@ type ClientResponse struct {
 func (c *Client) Read() {
 	defer func() {
 		c.Pool.Unregister <- c
+		c.Conn.Close()
 	}()
 
 	for {
