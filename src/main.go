@@ -8,8 +8,11 @@ import (
 
 func main() {
 	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 	app := &app.App{}
 	app.Init()
-	fmt.Printf("Server has started on port %s", port)
+	fmt.Printf("Server has started on port :%s", port)
 	app.Run(":" + port)
 }

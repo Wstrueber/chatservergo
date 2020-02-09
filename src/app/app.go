@@ -1,10 +1,12 @@
 package app
 
 import (
-	"chatservergo/src/app/controllers"
+	socket "chatservergo/src/app/websocket"
+	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -19,12 +21,35 @@ type App struct {
 // Init initializes Routers
 func (a *App) Init() {
 	a.Router = mux.NewRouter()
-	a.SetRouters()
+	a.SetupRoutes()
 }
 
-// SetRouters sets up routers
-func (a *App) SetRouters() {
-	a.Get("/ws", a.handleRequest(controllers.WebSocket))
+func serveWs(pool *socket.Pool, w http.ResponseWriter, r *http.Request) {
+	fmt.Println("WebSocket Endpoint Hit")
+	conn, err := socket.Upgrade(w, r)
+	if err != nil {
+		fmt.Fprintf(w, "%+v\n", err)
+	}
+
+	client := &socket.Client{
+		Conn:     conn,
+		Pool:     pool,
+		ClientID: uuid.New(),
+	}
+	fmt.Println(client.ClientID)
+	pool.Register <- client
+	client.Read()
+}
+
+func handleWS(w http.ResponseWriter, r *http.Request) {
+	pool := socket.NewPool()
+	go pool.Start()
+	serveWs(pool, w, r)
+}
+
+// SetupRoutes sets up routers
+func (a *App) SetupRoutes() {
+	a.Get("/ws", handleWS)
 }
 
 func (a *App) handleRequest(handler RequestHandlerFunction) http.HandlerFunc {
