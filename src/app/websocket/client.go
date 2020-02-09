@@ -48,33 +48,24 @@ func (c *Client) Read() {
 		var clientMessage *ClientMessage
 		err := c.Conn.ReadJSON(&clientMessage)
 		if err != nil {
-			c.Conn.Close()
 			err = fmt.Errorf("client.Read: Error reading json, %s", err.Error())
 			fmt.Println(err)
 			return
 		}
-		go c.handleClientRequest(clientMessage)
-	}
-}
 
-func (c *Client) handleClientRequest(clientMessage *ClientMessage) {
-	if clientMessage != nil {
-		switch clientMessage.Action {
-		case constants.RequestResponse:
-			fmt.Printf("client message %q", clientMessage.Client.UserName)
-			c.Pool.Broadcast <- clientMessage
-			return
-		case constants.RequestVersionNumber:
-			c.Conn.WriteJSON(JSONResponse{AppVersionNumber: constants.AppVersionNumber})
-			return
-		case constants.UserTyping:
-			fmt.Printf("Client ---> %s %s\n", clientMessage.Client.ClientID, clientMessage.Client.UserName, clientMessage.Typing)
-			c.Pool.Typing <- clientMessage
-			return
-		case constants.RequestLogin:
-			c.Pool.Login <- clientMessage.Client
-			return
+		if clientMessage != nil {
+			switch clientMessage.Action {
+			case constants.RequestResponse:
+				c.Pool.Broadcast <- clientMessage
+			case constants.RequestVersionNumber:
+				c.Conn.WriteJSON(JSONResponse{AppVersionNumber: constants.AppVersionNumber})
+			case constants.UserTyping:
+				fmt.Printf("Client ---> %s %s\n", clientMessage.Client.ClientID, clientMessage.Client.UserName, clientMessage.Typing)
+				c.Pool.Typing <- clientMessage
+			case constants.RequestLogin:
+				c.Pool.Login <- clientMessage.Client
+			}
 		}
+
 	}
-	return
 }

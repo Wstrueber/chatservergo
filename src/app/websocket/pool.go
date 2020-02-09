@@ -30,20 +30,20 @@ func (pool *Pool) Start() {
 		case client := <-pool.Register:
 			fmt.Printf("client registered %s", client.ClientID)
 			pool.Clients[client] = true
-			c1 := client
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
-			c1.Conn.WriteJSON(Client{ClientID: c1.ClientID})
+			client.Conn.WriteJSON(Client{ClientID: client.ClientID})
 
-			for client, _ := range pool.Clients {
-				client.Conn.WriteJSON(ClientResponse{Client: c1, Message: "New User Joined..."})
+			for c, _ := range pool.Clients {
+				c.Conn.WriteJSON(ClientResponse{Client: client, Message: "New User Joined..."})
 			}
 			break
 		case client := <-pool.Unregister:
+			_, ok := pool.Clients[client]
+			if ok {
+				delete(pool.Clients, client)
+			}
 			fmt.Print("DELETING")
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
-			client.Conn.Close()
-			delete(pool.Clients, client)
-
 			break
 		case message := <-pool.Broadcast:
 			fmt.Println("Sending message to all clients in Pool")
@@ -54,7 +54,7 @@ func (pool *Pool) Start() {
 					fmt.Println(err)
 					client.Conn.Close()
 					delete(pool.Clients, client)
-					return
+					break
 				}
 			}
 		case typing := <-pool.Typing:
@@ -64,7 +64,7 @@ func (pool *Pool) Start() {
 					fmt.Println(err)
 					client.Conn.Close()
 					delete(pool.Clients, client)
-					return
+					break
 				}
 			}
 		case login := <-pool.Login:
