@@ -39,12 +39,11 @@ func (pool *Pool) Start() {
 			}
 			break
 		case client := <-pool.Unregister:
+			fmt.Print("DELETING")
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
+			client.Conn.Close()
 			delete(pool.Clients, client)
-			c1 := client
-			for client, _ := range pool.Clients {
-				client.Conn.WriteJSON(ClientResponse{Client: c1, Message: "New User Joined..."})
-			}
+
 			break
 		case message := <-pool.Broadcast:
 			fmt.Println("Sending message to all clients in Pool")
@@ -53,6 +52,8 @@ func (pool *Pool) Start() {
 				sender := Client{ClientID: message.Client.ClientID, UserName: message.Client.UserName}
 				if err := client.Conn.WriteJSON(ClientResponse{Client: &sender, Message: message.Message}); err != nil {
 					fmt.Println(err)
+					client.Conn.Close()
+					delete(pool.Clients, client)
 					return
 				}
 			}
@@ -61,6 +62,8 @@ func (pool *Pool) Start() {
 			for client, _ := range pool.Clients {
 				if err := client.Conn.WriteJSON(ClientResponse{Client: typing.Client, Typing: typing.Typing}); err != nil {
 					fmt.Println(err)
+					client.Conn.Close()
+					delete(pool.Clients, client)
 					return
 				}
 			}
@@ -73,6 +76,8 @@ func (pool *Pool) Start() {
 					fmt.Printf("\nFound Client ----> %s", login.UserName)
 					if err := client.Conn.WriteJSON(Client{ClientID: login.ClientID, UserName: login.UserName}); err != nil {
 						fmt.Println(err)
+						client.Conn.Close()
+						delete(pool.Clients, client)
 						return
 					}
 				}
