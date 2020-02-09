@@ -52,7 +52,7 @@ func (c *Client) Read() {
 			fmt.Println(err)
 			return
 		}
-		c.handleClientRequest(clientMessage)
+		go c.handleClientRequest(clientMessage)
 	}
 }
 
