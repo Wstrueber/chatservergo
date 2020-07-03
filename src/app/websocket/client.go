@@ -17,6 +17,12 @@ type Client struct {
 	Color    string          `json:"color"`
 }
 
+type Clients []*Client
+
+func (c *Clients) append(client *Client) {
+	*c = append(*c, client)
+}
+
 // JSONResponse ...
 type JSONResponse struct {
 	AppVersionNumber string `json:"appVersionNumber,omitempty"`
@@ -36,6 +42,7 @@ type ClientResponse struct {
 	Message string     `json:"message,omitempty"`
 	Time    *time.Time `json:"serverTime,omitempty"`
 	Typing  bool       `json:"typing,omitempty"`
+	Clients []*Client  `json:"Clients"`
 }
 
 func (c *Client) Read() {
@@ -45,7 +52,6 @@ func (c *Client) Read() {
 	}()
 
 	for {
-		fmt.Println("Reading")
 		var clientMessage *ClientMessage
 		err := c.Conn.ReadJSON(&clientMessage)
 		if err != nil {
@@ -61,7 +67,6 @@ func (c *Client) Read() {
 			case constants.RequestVersionNumber:
 				c.Conn.WriteJSON(JSONResponse{AppVersionNumber: constants.AppVersionNumber})
 			case constants.UserTyping:
-				fmt.Printf("Client ---> %s %s\n", clientMessage.Client.ClientID, clientMessage.Client.UserName)
 				c.Pool.Typing <- clientMessage
 			case constants.RequestLogin:
 				c.Pool.Login <- clientMessage.Client

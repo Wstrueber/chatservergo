@@ -1,93 +1,112 @@
 package websocket
 
 import (
+	"chatservergo/src/app/utils"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
+// Pool pool type
 type Pool struct {
 	Register   chan *Client
 	Unregister chan *Client
-	Clients    map[*Client]bool
+	Clients    map[uuid.UUID]*Client
 	Broadcast  chan *ClientMessage
 	Typing     chan *ClientMessage
 	Login      chan *Client
 }
 
+// NewPool creats the pool
 func NewPool() *Pool {
 	return &Pool{
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
-		Clients:    make(map[*Client]bool),
+		Clients:    make(map[uuid.UUID]*Client),
 		Broadcast:  make(chan *ClientMessage),
 		Typing:     make(chan *ClientMessage),
 		Login:      make(chan *Client),
 	}
 }
 
+// Start starts the pool
 func (pool *Pool) Start() {
 	for {
 		select {
 		case client := <-pool.Register:
-			fmt.Printf("client registered %s", client.ClientID)
-			pool.Clients[client] = true
+			pool.Clients[client.ClientID] = client
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
 			client.Conn.WriteJSON(Client{ClientID: client.ClientID})
 			break
 		case client := <-pool.Unregister:
-			_, ok := pool.Clients[client]
-			fmt.Print("DELETING")
+			_, ok := pool.Clients[client.ClientID]
 			if ok {
-				delete(pool.Clients, client)
+				delete(pool.Clients, client.ClientID)
 			}
 			fmt.Println("Size of Connection Pool: ", len(pool.Clients))
 			break
 		case message := <-pool.Broadcast:
-			fmt.Println("Sending message to all clients in Pool")
-			for client, _ := range pool.Clients {
-				fmt.Println(client.UserName, "client")
-				sender := Client{ClientID: message.Client.ClientID, UserName: message.Client.UserName}
-				if err := client.Conn.WriteJSON(ClientResponse{Client: &sender, Message: message.Message}); err != nil {
+			sender := pool.Clients[message.Client.ClientID]
+
+			clients := make(Clients, 0)
+			for _, value := range pool.Clients {
+				if value.ClientID != uuid.Nil {
+					clients.append(value)
+				}
+			}
+			for _, client := range pool.Clients {
+				if err := client.Conn.WriteJSON(ClientResponse{Client: sender, Message: message.Message, Clients: clients}); err != nil {
 					fmt.Println(err)
 					client.Conn.Close()
-					delete(pool.Clients, client)
+					delete(pool.Clients, client.ClientID)
 					break
 				}
 			}
 			break
 		case typing := <-pool.Typing:
 			fmt.Println(typing.Typing)
-			for client, _ := range pool.Clients {
+			for _, client := range pool.Clients {
+				clients := make(Clients, 0)
+				for _, value := range pool.Clients {
+					if value.ClientID != uuid.Nil {
+						clients.append(value)
+					}
+				}
 				if typing.Client.ClientID != client.ClientID {
-					if err := client.Conn.WriteJSON(ClientResponse{Client: typing.Client, Typing: typing.Typing}); err != nil {
+					if err := client.Conn.WriteJSON(ClientResponse{Client: pool.Clients[typing.Client.ClientID], Clients: clients, Typing: typing.Typing}); err != nil {
 						fmt.Println(err)
 						client.Conn.Close()
-						delete(pool.Clients, client)
+						delete(pool.Clients, client.ClientID)
 						break
 					}
 				}
 			}
 			break
 		case login := <-pool.Login:
-
-			fmt.Printf("%s", login.UserName)
-			for client, _ := range pool.Clients {
+			for _, client := range pool.Clients {
+				clients := make(Clients, 0)
+				for _, value := range pool.Clients {
+					if value.ClientID != uuid.Nil {
+						clients.append(value)
+					}
+				}
 				if client.ClientID == login.ClientID {
 					client.UserName = login.UserName
-					fmt.Printf("\nFound Client ----> %s", login.UserName)
-					if err := client.Conn.WriteJSON(Client{ClientID: login.ClientID, UserName: login.UserName}); err != nil {
+					client.Color = utils.GetRandomColorInHex()
+					if err := client.Conn.WriteJSON(Client{ClientID: login.ClientID, Color: client.Color, UserName: login.UserName}); err != nil {
 						fmt.Println(err)
 						client.Conn.Close()
-						delete(pool.Clients, client)
+						delete(pool.Clients, client.ClientID)
 						break
 					}
 				}
 				if client.ClientID != login.ClientID {
-					fmt.Println(login.UserName, login.ClientID, "<---- user \n")
-					message := &ClientResponse{Client: &Client{UserName: login.UserName}, Message: "has joined..."}
+					color := pool.Clients[login.ClientID].Color
+					message := &ClientResponse{Client: &Client{UserName: login.UserName, Color: color}, Clients: clients, Message: "has joined..."}
 					if err := client.Conn.WriteJSON(message); err != nil {
 						fmt.Println(err)
 						client.Conn.Close()
-						delete(pool.Clients, client)
+						delete(pool.Clients, client.ClientID)
 						break
 					}
 				}
